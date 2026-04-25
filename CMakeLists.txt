@@ -34,7 +34,19 @@ add_executable(reduction_bench
   kernels/reduction/reduction_kernels.cu
 )
 
+add_executable(softmax_bench
+  benchmarks/softmax_bench.cu
+  kernels/softmax/softmax_kernels.cu
+)
+
 target_include_directories(reduction_bench
+  PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/kernels"
+    "${CUDAToolkit_INCLUDE_DIRS}"
+)
+
+target_include_directories(softmax_bench
   PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/kernels"
@@ -43,9 +55,15 @@ target_include_directories(reduction_bench
 
 if(EXISTS "${CUDAToolkit_INCLUDE_DIRS}/cccl")
   target_include_directories(reduction_bench PRIVATE "${CUDAToolkit_INCLUDE_DIRS}/cccl")
+  target_include_directories(softmax_bench PRIVATE "${CUDAToolkit_INCLUDE_DIRS}/cccl")
 endif()
 
 target_compile_definitions(reduction_bench
+  PRIVATE
+    CUDA_PERF_LAB_COMMIT_HASH="${GIT_HASH}"
+)
+
+target_compile_definitions(softmax_bench
   PRIVATE
     CUDA_PERF_LAB_COMMIT_HASH="${GIT_HASH}"
 )
@@ -56,6 +74,14 @@ target_compile_options(reduction_bench
     $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
 )
 
+target_compile_options(softmax_bench
+  PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wpedantic>
+    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
+)
+
 target_link_libraries(reduction_bench PRIVATE CUDA::cudart)
+target_link_libraries(softmax_bench PRIVATE CUDA::cudart)
 
 set_target_properties(reduction_bench PROPERTIES CUDA_SEPARABLE_COMPILATION OFF)
+set_target_properties(softmax_bench PROPERTIES CUDA_SEPARABLE_COMPILATION OFF)

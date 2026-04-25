@@ -41,3 +41,29 @@ any `n`.
 CUB is the library baseline. It is included so this repo compares against a real
 production-grade primitive, not just against worse local kernels. If the custom
 kernels do not beat CUB, that is expected and useful evidence.
+
+# Softmax Variants
+
+## naive
+
+The naive softmax assigns one thread to each row and computes direct exponentials
+without subtracting the row maximum. Inputs are bounded for v1 so this remains a
+valid baseline, but it is not the numerically robust production form.
+
+## stable_two_pass
+
+This variant still uses one thread per row, but it computes a row max, then a
+sum of shifted exponentials, then normalized output. It is simple and stable,
+and serves as the custom baseline for softmax ratios.
+
+## block_reduce
+
+One CUDA block handles one row. Threads cooperate on the max reduction and sum
+reduction, then write normalized output. This demonstrates block-level
+reductions and synchronization for moderate or large row widths.
+
+## warp_small_row
+
+One warp handles one row using shuffle reductions for max and sum. This avoids
+block-wide synchronization for small rows and is intended for `cols <= 1024`,
+while remaining correct for larger rows by striding each lane across the row.

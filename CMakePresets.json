@@ -27,14 +27,16 @@
       "name": "build-debug",
       "configurePreset": "configure-debug",
       "targets": [
-        "reduction_bench"
+        "reduction_bench",
+        "softmax_bench"
       ]
     },
     {
       "name": "build-release",
       "configurePreset": "configure-release",
       "targets": [
-        "reduction_bench"
+        "reduction_bench",
+        "softmax_bench"
       ]
     }
   ]

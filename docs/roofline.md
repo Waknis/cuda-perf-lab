@@ -75,3 +75,53 @@ Did the optimization reduce launches, memory traffic, divergence, or stalls?
   of tuned reductions, architecture-specific choices, and careful launch policy.
 
 Fill measured bandwidth only after running the benchmark.
+
+# Roofline Notes: Softmax
+
+Softmax is not a pure bandwidth test because each element usually participates
+in at least one `expf`. Still, many practical row-wise softmax shapes are
+strongly shaped by memory traffic, row reductions, and synchronization overhead.
+
+## Basic Model
+
+For a matrix with `rows * cols` float32 elements:
+
+```text
+elements = rows * cols
+matrix_bytes = elements * sizeof(float)
+```
+
+The v1 benchmark estimates global traffic as:
+
+```text
+naive_bytes = 3 * matrix_bytes
+stable_two_pass_bytes = 4 * matrix_bytes
+block_reduce_bytes = 4 * matrix_bytes
+warp_small_row_bytes = 4 * matrix_bytes
+```
+
+`naive` reads the input to sum exponentials, reads again to normalize, and writes
+the output. Stable variants read once for max, once for sum, once for
+normalization, and write output.
+
+The reported effective bandwidth is:
+
+```text
+effective_bandwidth_gb_s =
+  estimated_bytes_moved / latency_seconds / 1e9
+```
+
+This estimate ignores register traffic, shared-memory traffic, and the true
+cost of exponentials. It is useful for comparing staged kernels, not for
+claiming a hardware roofline limit.
+
+## Expected Behavior
+
+- Small rows can benefit from one warp per row because warp shuffle reductions
+  avoid block-wide synchronization.
+- Large rows usually need more than one warp of cooperation; block-level
+  reductions give more parallelism per row.
+- For large enough matrices, launch overhead matters less and memory/reduction
+  efficiency should dominate.
+- Framework or Triton softmax may still win through fusion, row-width-specific
+  policies, and deeper architecture tuning.

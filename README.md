@@ -3,9 +3,9 @@
 Architecture-aware CUDA kernel optimization experiments for AI inference and
 numerical finance workloads.
 
-V1 is intentionally narrow: it implements a staged float32 reduction benchmark
-and compares the custom kernels against CUB. Softmax, matmul, and Monte Carlo
-are planned, but not implemented yet.
+The repo currently contains a completed reduction v1 artifact with RTX 5060 Ti
+benchmark and Nsight evidence, plus a softmax v1 implementation scaffold for AI
+inference relevance. Matmul and Monte Carlo are not implemented yet.
 
 ## What This Repo Proves
 
@@ -264,6 +264,98 @@ NCU_METRICS="sm__warps_active.avg.pct_of_peak_sustained_active,dram__throughput.
 
 Record findings in `docs/nsight_analysis.md`. Do not paste guessed metrics.
 
+## Softmax
+
+Softmax v1 adds an AI inference workload: row-wise float32 softmax over a
+row-major matrix. It proves max reduction, exponential normalization, sum
+reduction, and row-wise memory traffic behavior without requiring PyTorch or
+Triton.
+
+### Why Softmax Matters
+
+Softmax appears in attention and classification-style inference paths. A good
+softmax kernel is not just "take exp"; it has to reduce each row for the max,
+reduce again for the denominator, and write normalized probabilities with
+controlled memory traffic.
+
+### Softmax Variants
+
+| Variant | Purpose |
+| --- | --- |
+| `naive` | One-thread-per-row baseline using bounded inputs. |
+| `stable_two_pass` | Stable one-thread-per-row max/sum/normalize baseline. |
+| `block_reduce` | One CUDA block per row for moderate and large rows. |
+| `warp_small_row` | One warp per row, optimized for small rows and safe for larger rows. |
+| `all` | Runs every softmax variant and reports ratio to `stable_two_pass`. |
+
+### Run Softmax
+
+Build and run a small correctness smoke test:
+
+```bash
+cmake --build --preset build-release
+./build/release/softmax_bench --variant all --rows 16 --cols 128 --iters 3 --warmup 1 --seed 123
+```
+
+Generate representative RTX 5060 Ti softmax CSV and JSON results:
+
+```bash
+./scripts/run_softmax.sh
+```
+
+The script writes:
+
+```text
+results/rtx_5060_ti/softmax_results.csv
+results/rtx_5060_ti/softmax_results.json
+```
+
+### Softmax Methodology
+
+- Input is deterministic bounded float32 data generated from `--seed`.
+- CPU reference uses double precision and numerically stable softmax.
+- Correctness reports max absolute error, max relative error, and max row-sum
+  error.
+- Warmups are excluded from CUDA-event timing.
+- Bandwidth is estimated from documented global matrix traffic.
+- No GFLOP/s is reported in v1 because the `expf` cost model is not simple
+  enough for an honest one-line estimate.
+- Baseline ratio is relative to `stable_two_pass`.
+
+### Softmax Results
+
+TODO: Fill only from `results/rtx_5060_ti/softmax_results.csv` after running
+`./scripts/run_softmax.sh`.
+
+| rows | cols | variant | median us | p95 us | GB/s | max abs error | max rel error | row sum error | baseline ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+
+### Softmax Nsight Compute
+
+Profile representative softmax variants:
+
+```bash
+./scripts/profile_softmax_ncu.sh
+```
+
+Reports are saved under:
+
+```text
+results/rtx_5060_ti/ncu/
+```
+
+Look for achieved occupancy, register count, memory throughput, global load
+behavior, shared memory usage, and warp stall reasons. Missing metrics should be
+recorded as `not captured`.
+
+### Why Framework Softmax May Still Win
+
+PyTorch, Triton, and vendor/library softmax kernels can fuse operations, tune
+for specific row widths, use architecture-specific launch policy, and avoid
+extra reads or writes in ways this educational v1 does not. Beating them is not
+the claim; explaining the gap is the point.
+
 ## Smoke Verification
 
 These commands were used for smoke testing during v1 development:
@@ -294,9 +386,10 @@ That failure analysis is part of the point.
 
 ## Planned Work
 
-- V2: softmax kernels for AI inference relevance.
-- V3: tiled matrix multiplication with cuBLAS comparison.
-- V4: Monte Carlo option pricing for quant workloads.
+- Softmax evidence collection: run the softmax benchmark/profiling scripts and
+  update docs from real files only.
+- Matmul: tiled matrix multiplication with cuBLAS comparison.
+- Monte Carlo: option pricing for quant workloads.
 
 ## Repo Layout
 

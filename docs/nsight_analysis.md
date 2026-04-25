@@ -139,3 +139,62 @@ next experiment: Compare CUB's two-kernel policy with the custom vectorized firs
 - Whether stalls are dominated by memory dependency, memory throttle, or launch
   overhead.
 - Whether CUB uses a different launch strategy or fewer bottleneck symptoms.
+
+# Softmax Nsight Templates
+
+Do not fill these with guessed values. Use only `softmax_*.ncu-rep` files under
+`results/rtx_5060_ti/ncu/`. If a metric is absent, write `not captured`.
+
+### stable_two_pass
+
+```text
+input shape: TODO
+median benchmark latency: TODO
+benchmark bandwidth: TODO
+baseline ratio: TODO
+profiled kernel: TODO
+achieved occupancy: not captured
+register count: not captured
+memory throughput: not captured
+global load behavior: not captured
+shared memory usage: not captured
+top warp stall reason: not captured
+interpretation: TODO
+next experiment: TODO
+```
+
+### block_reduce
+
+```text
+input shape: TODO
+median benchmark latency: TODO
+benchmark bandwidth: TODO
+baseline ratio: TODO
+profiled kernel: TODO
+achieved occupancy: not captured
+register count: not captured
+memory throughput: not captured
+global load behavior: not captured
+shared memory usage: not captured
+top warp stall reason: not captured
+interpretation: TODO
+next experiment: TODO
+```
+
+### warp_small_row
+
+```text
+input shape: TODO
+median benchmark latency: TODO
+benchmark bandwidth: TODO
+baseline ratio: TODO
+profiled kernel: TODO
+achieved occupancy: not captured
+register count: not captured
+memory throughput: not captured
+global load behavior: not captured
+shared memory usage: not captured
+top warp stall reason: not captured
+interpretation: TODO
+next experiment: TODO
+```
