@@ -22,6 +22,37 @@ No benchmark number, Nsight metric, hardware result, or speedup in this repo
 should be invented. Empty tables stay TODO until a command actually produces
 data.
 
+## Highlights
+
+- Reduction: the custom `vectorized_float4` kernel reached `1.006358415x` CUB
+  latency at `n=67108864` in the recorded RTX 5060 Ti run, with repeated runs
+  needed before treating that small gap as stable.
+- Softmax: the warp-per-row implementation was fastest across the tested
+  shapes, including `1024 x 4096`, but that result is implementation-specific
+  rather than a universal softmax rule.
+- Profiling: Nsight Compute reports for reduction and softmax point to memory
+  dependency as a central bottleneck, with long scoreboard stalls appearing in
+  the profiled kernels.
+
+## Workflow
+
+```text
+kernel variants -> benchmark harness -> CSV/JSON results -> Nsight Compute reports -> README/docs interpretation
+```
+
+## Reproduce Results
+
+From the repo root in WSL, regenerate the benchmark CSV/JSON results with:
+
+```bash
+cmake --preset configure-release
+cmake --build --preset build-release
+./scripts/run_reduction.sh && ./scripts/run_softmax.sh
+```
+
+Nsight Compute reports use the `profile_*_ncu.sh` scripts documented in the
+profiling sections below because those runs are slower and profiler-specific.
+
 ## Hardware Target
 
 Canonical environment:
@@ -285,8 +316,13 @@ controlled memory traffic.
 | `naive` | One-thread-per-row baseline using bounded inputs. |
 | `stable_two_pass` | Stable one-thread-per-row max/sum/normalize baseline. |
 | `block_reduce` | One CUDA block per row for moderate and large rows. |
-| `warp_small_row` | One warp per row, optimized for small rows and safe for larger rows. |
+| `warp_small_row` | One warp per row with lane-strided loops; optimized for small rows and safe for larger rows. |
 | `all` | Runs every softmax variant and reports ratio to `stable_two_pass`. |
+
+Despite the name, `warp_small_row` has no hard small-row correctness limit.
+Each lane walks `col = lane; col < cols; col += warpSize` for the max, sum,
+and output passes. The name describes the intended design target: row widths
+where one warp per row has low overhead and avoids block-wide synchronization.
 
 ### Run Softmax
 
@@ -350,7 +386,9 @@ In this benchmark run, `warp_small_row` was the fastest and had the highest
 estimated effective bandwidth for every measured shape. That matches the
 expected benefit of warp-level row reductions for small and moderate rows, and
 it also won the `1024 x 4096` large-row shape in this implementation. The
-large-row result should be read as implementation-specific, not as a universal
+large-row case is still handled by the same lane-strided loops described above,
+so it is safe but not necessarily the best policy on every GPU, row width, or
+implementation. Treat that result as implementation-specific, not as a universal
 claim that one-warp-per-row softmax always beats block-per-row softmax.
 
 ### Softmax Nsight Compute

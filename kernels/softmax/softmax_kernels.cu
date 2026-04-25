@@ -145,6 +145,8 @@ __global__ void warp_small_row_kernel(const float* input, float* output, std::si
 
   const std::size_t base = row * cols;
 
+  // Lanes walk the row in warp-size strides, so this remains correct for rows
+  // wider than 32 columns while keeping the small-row path synchronization-free.
   float local_max = kNegInf;
   for (std::size_t col = lane; col < cols; col += warpSize) {
     local_max = fmaxf(local_max, input[base + col]);

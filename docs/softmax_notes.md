@@ -48,7 +48,8 @@ the cost of `expf`. This keeps the reported bandwidth honest but simple.
 `warp_small_row` assigns one warp to each row. This is useful when rows are
 small enough that a warp can cover the row with a few lane-strided iterations.
 It targets `cols <= 1024`, but the implementation is safe for larger rows by
-having lanes stride across the row.
+having lanes stride across the row. Concretely, lane `i` visits columns `i`,
+`i + 32`, `i + 64`, and so on during the max, sum, and output passes.
 
 ## Block Per Row
 
