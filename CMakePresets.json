@@ -1,0 +1,41 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "configure-debug",
+      "displayName": "Debug configure",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CUDA_ARCHITECTURES": "120"
+      }
+    },
+    {
+      "name": "configure-release",
+      "displayName": "Release configure",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CUDA_ARCHITECTURES": "120"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "build-debug",
+      "configurePreset": "configure-debug",
+      "targets": [
+        "reduction_bench"
+      ]
+    },
+    {
+      "name": "build-release",
+      "configurePreset": "configure-release",
+      "targets": [
+        "reduction_bench"
+      ]
+    }
+  ]
+}
