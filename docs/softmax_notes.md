@@ -63,3 +63,31 @@ practical inference shapes, though, performance is strongly shaped by memory
 traffic, row reductions, and synchronization overhead. The useful question is
 not just "how many exponentials?" but also how often the row is reread and how
 efficiently reductions are performed.
+
+## RTX 5060 Ti Benchmark Evidence
+
+Source: `results/rtx_5060_ti/softmax_results.csv`.
+
+| shape | fastest variant | median us | best bandwidth variant | bandwidth GB/s |
+| --- | --- | --- | --- | --- |
+| `4096 x 128` | `warp_small_row` | `10.36799978` | `warp_small_row` | `809.0864366` |
+| `4096 x 512` | `warp_small_row` | `20.25599964` | `warp_small_row` | `1656.518197` |
+| `4096 x 1024` | `warp_small_row` | `45.64800113` | `warp_small_row` | `1470.138064` |
+| `1024 x 4096` | `warp_small_row` | `48.49600047` | `warp_small_row` | `1383.802032` |
+
+In this run, `warp_small_row` was fastest and had the highest estimated
+effective bandwidth for every measured shape. That agrees with the intended
+small-row design: a warp can reduce a row with shuffle operations and avoid
+block-wide synchronization. Its win at `1024 x 4096` is useful evidence for this
+implementation, but it should not be generalized without repeated runs and
+additional profiling at that large-row shape.
+
+The one-thread-per-row `stable_two_pass` baseline is numerically stable but slow
+because every row reduction is serial within one thread. `block_reduce` improves
+large-row parallelism substantially; for `1024 x 4096`, its median latency was
+`56.04799837 us` versus `917.6319838 us` for `stable_two_pass`.
+
+Nsight reports under `results/rtx_5060_ti/ncu/` recorded long scoreboard as the
+top captured stall reason for the profiled softmax variants. That supports the
+expected model that memory dependency and row-wise reduction traffic matter,
+while still keeping benchmark data and profiler data separate.

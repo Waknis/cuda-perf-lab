@@ -67,3 +67,29 @@ reductions and synchronization for moderate or large row widths.
 One warp handles one row using shuffle reductions for max and sum. This avoids
 block-wide synchronization for small rows and is intended for `cols <= 1024`,
 while remaining correct for larger rows by striding each lane across the row.
+
+## Softmax Evidence Notes
+
+Source: `results/rtx_5060_ti/softmax_results.csv`.
+
+In the measured RTX 5060 Ti run, `warp_small_row` was the fastest softmax
+variant for all benchmarked shapes:
+
+| shape | `warp_small_row` median us | next fastest variant | next fastest median us |
+| --- | --- | --- | --- |
+| `4096 x 128` | `10.36799978` | `naive` | `29.05599959` |
+| `4096 x 512` | `20.25599964` | `block_reduce` | `53.44000086` |
+| `4096 x 1024` | `45.64800113` | `block_reduce` | `66.46399945` |
+| `1024 x 4096` | `48.49600047` | `block_reduce` | `56.04799837` |
+
+The small-row wins match the intended purpose of `warp_small_row`. The
+`1024 x 4096` result shows that this implementation's warp-strided large-row
+path was also strong in this run, but that should be treated as run-dependent
+until repeated measurements confirm it.
+
+Source: `results/rtx_5060_ti/ncu/softmax_*.ncu-rep`.
+
+The profiled softmax reports captured long scoreboard as the top warp stall
+reason for `stable_two_pass`, `block_reduce`, and `warp_small_row`. That is
+consistent with memory dependency being an important limiter, but it does not
+replace the benchmark CSV for latency comparisons.

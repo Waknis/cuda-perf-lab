@@ -125,3 +125,26 @@ claiming a hardware roofline limit.
   efficiency should dominate.
 - Framework or Triton softmax may still win through fusion, row-width-specific
   policies, and deeper architecture tuning.
+
+## Measured Softmax Evidence
+
+Source: `results/rtx_5060_ti/softmax_results.csv`.
+
+| shape | fastest variant | median us | highest estimated bandwidth | bandwidth GB/s |
+| --- | --- | --- | --- | --- |
+| `4096 x 128` | `warp_small_row` | `10.36799978` | `warp_small_row` | `809.0864366` |
+| `4096 x 512` | `warp_small_row` | `20.25599964` | `warp_small_row` | `1656.518197` |
+| `4096 x 1024` | `warp_small_row` | `45.64800113` | `warp_small_row` | `1470.138064` |
+| `1024 x 4096` | `warp_small_row` | `48.49600047` | `warp_small_row` | `1383.802032` |
+
+These bandwidth values are benchmark-side estimates using the formula above,
+not physical DRAM counters. They count logical matrix traffic implied by the
+kernel structure. Nsight DRAM throughput is recorded separately in
+`docs/nsight_analysis.md`.
+
+The small-row results match the roofline expectation that reducing row
+synchronization and memory rereads matters. The `1024 x 4096` result also favors
+`warp_small_row` in this run, but that is a measured outcome for this
+implementation rather than a general rule; a more complete roofline study would
+repeat runs and profile the same large shape for both `block_reduce` and
+`warp_small_row`.

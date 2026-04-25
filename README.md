@@ -3,9 +3,9 @@
 Architecture-aware CUDA kernel optimization experiments for AI inference and
 numerical finance workloads.
 
-The repo currently contains a completed reduction v1 artifact with RTX 5060 Ti
-benchmark and Nsight evidence, plus a softmax v1 implementation scaffold for AI
-inference relevance. Matmul and Monte Carlo are not implemented yet.
+The repo currently contains completed reduction and softmax v1 artifacts with
+RTX 5060 Ti benchmark and Nsight evidence. Matmul and Monte Carlo are not
+implemented yet.
 
 ## What This Repo Proves
 
@@ -324,12 +324,34 @@ results/rtx_5060_ti/softmax_results.json
 
 ### Softmax Results
 
-TODO: Fill only from `results/rtx_5060_ti/softmax_results.csv` after running
-`./scripts/run_softmax.sh`.
+Source: `results/rtx_5060_ti/softmax_results.csv`. Benchmark data and Nsight
+profiler data are separate; the table below is benchmark data only.
 
 | rows | cols | variant | median us | p95 us | GB/s | max abs error | max rel error | row sum error | baseline ratio |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+| 4096 | 128 | naive | 29.05599959 | 45.50400004 | 216.5286374 | 4.261725935e-08 | 7.736328632e-07 | 6.573936844e-07 | 0.8024745792 |
+| 4096 | 128 | stable_two_pass | 36.20800003 | 52.41600052 | 231.6783029 | 4.467263601e-08 | 9.484457293e-07 | 6.073441909e-07 | 1 |
+| 4096 | 128 | block_reduce | 47.64800146 | 50.65599829 | 176.0537219 | 1.33545618e-08 | 4.924956992e-07 | 1.602293196e-07 | 1.315952315 |
+| 4096 | 128 | warp_small_row | 10.36799978 | 28.92800048 | 809.0864366 | 1.358760054e-08 | 4.924956992e-07 | 1.412863639e-07 | 0.2863455528 |
+| 4096 | 512 | naive | 100.6079987 | 109.0560034 | 250.1374079 | 2.080695207e-08 | 1.279423175e-06 | 1.140637778e-06 | 0.804709448 |
+| 4096 | 512 | stable_two_pass | 125.0240058 | 141.7600065 | 268.3839139 | 1.974259728e-08 | 1.545079688e-06 | 1.216165401e-06 | 1 |
+| 4096 | 512 | block_reduce | 53.44000086 | 55.23199961 | 627.8898102 | 3.340429246e-09 | 5.098644972e-07 | 1.52343091e-07 | 0.4274379191 |
+| 4096 | 512 | warp_small_row | 20.25599964 | 32.03200176 | 1656.518197 | 3.855019576e-09 | 5.397656429e-07 | 1.75479272e-07 | 0.1620168824 |
+| 4096 | 1024 | naive | 193.2479963 | 196.352005 | 260.4510731 | 1.421844931e-08 | 1.83575157e-06 | 1.689710416e-06 | 0.7944484464 |
+| 4096 | 1024 | stable_two_pass | 243.2480007 | 247.5520074 | 275.8866005 | 1.221485248e-08 | 1.841952763e-06 | 1.482567313e-06 | 1 |
+| 4096 | 1024 | block_reduce | 66.46399945 | 86.65599674 | 1009.702464 | 1.590226388e-09 | 5.143566691e-07 | 1.588673513e-07 | 0.2732355425 |
+| 4096 | 1024 | warp_small_row | 45.64800113 | 64.80000168 | 1470.138064 | 1.958800033e-09 | 5.477278315e-07 | 2.019933163e-07 | 0.1876603343 |
+| 1024 | 4096 | naive | 730.1440239 | 902.8159976 | 68.93386284 | 7.043033519e-09 | 3.837401178e-06 | 3.658493938e-06 | 0.7956828411 |
+| 1024 | 4096 | stable_two_pass | 917.6319838 | 1100.736022 | 73.13265578 | 5.982558308e-09 | 3.329482876e-06 | 2.962015401e-06 | 1 |
+| 1024 | 4096 | block_reduce | 56.04799837 | 62.97600269 | 1197.346309 | 4.303151923e-10 | 5.249813505e-07 | 1.337249387e-07 | 0.06107895034 |
+| 1024 | 4096 | warp_small_row | 48.49600047 | 64.76800144 | 1383.802032 | 4.911223503e-10 | 5.511743613e-07 | 1.634575142e-07 | 0.05284907384 |
+
+In this benchmark run, `warp_small_row` was the fastest and had the highest
+estimated effective bandwidth for every measured shape. That matches the
+expected benefit of warp-level row reductions for small and moderate rows, and
+it also won the `1024 x 4096` large-row shape in this implementation. The
+large-row result should be read as implementation-specific, not as a universal
+claim that one-warp-per-row softmax always beats block-per-row softmax.
 
 ### Softmax Nsight Compute
 
@@ -348,6 +370,27 @@ results/rtx_5060_ti/ncu/
 Look for achieved occupancy, register count, memory throughput, global load
 behavior, shared memory usage, and warp stall reasons. Missing metrics should be
 recorded as `not captured`.
+
+Captured softmax reports:
+
+```text
+softmax_stable_two_pass_rows4096_cols512_iters5.ncu-rep
+softmax_block_reduce_rows1024_cols4096_iters5.ncu-rep
+softmax_warp_small_row_rows4096_cols128_iters5.ncu-rep
+```
+
+Summary from the profiled kernel in each report:
+
+| variant | shape | achieved occupancy | registers/thread | DRAM throughput | memory throughput | global load behavior | shared memory/block | top captured stall |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `stable_two_pass` | `4096 x 512` | `8.321258%` | `39` | `99397856793.850861 byte/s` | `69.269273%` | `4 byte/sector` | `1024 byte/block` | long scoreboard, `13.171933 inst` |
+| `block_reduce` | `1024 x 4096` | `91.832641%` | `22` | `308736740135.620300 byte/s` | `70.005227%` | `32 byte/sector` | `2048 byte/block` | long scoreboard, `20.942470 inst` |
+| `warp_small_row` | `4096 x 128` | `77.515592%` | `40` | `271105929108.687744 byte/s` | `61.676348%` | `32 byte/sector` | `1024 byte/block` | long scoreboard, `8.019646 inst` |
+
+The profiler data is from targeted shapes, not the full benchmark matrix. It
+supports the expected model that global-memory dependency and row reductions are
+important: all three profiled variants report long scoreboard as the top
+captured stall reason.
 
 ### Why Framework Softmax May Still Win
 
@@ -386,8 +429,6 @@ That failure analysis is part of the point.
 
 ## Planned Work
 
-- Softmax evidence collection: run the softmax benchmark/profiling scripts and
-  update docs from real files only.
 - Matmul: tiled matrix multiplication with cuBLAS comparison.
 - Monte Carlo: option pricing for quant workloads.
 

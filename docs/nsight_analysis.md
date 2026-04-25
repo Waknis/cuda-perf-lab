@@ -4,7 +4,8 @@ Do not fill this file with guessed numbers. Values below come from files under
 `results/rtx_5060_ti/`.
 
 Benchmark latency and effective bandwidth come from
-`results/rtx_5060_ti/reduction_results.csv`. Profiling counters come from the
+`results/rtx_5060_ti/reduction_results.csv` and
+`results/rtx_5060_ti/softmax_results.csv`. Profiling counters come from the
 Nsight Compute `.ncu-rep` files in `results/rtx_5060_ti/ncu/`.
 
 ## Hardware
@@ -14,8 +15,9 @@ GPU: NVIDIA GeForce RTX 5060 Ti
 CUDA: 13.2
 Driver: 595.97
 Commit: unknown
-Profiler command: scripts/profile_reduction_ncu.sh
-Profiler command line in reports: ncu --target-processes all --force-overwrite --set full --export ... reduction_bench --variant <variant> --n 67108864 --iters 5 --warmup 2 --seed 1234
+Reduction profiler command: scripts/profile_reduction_ncu.sh
+Softmax profiler command: scripts/profile_softmax_ncu.sh
+Reduction profiler command line in reports: ncu --target-processes all --force-overwrite --set full --export ... reduction_bench --variant <variant> --n 67108864 --iters 5 --warmup 2 --seed 1234
 Nsight Compute version: 2026.1.1.0 (build 37634170)
 ```
 
@@ -140,61 +142,79 @@ next experiment: Compare CUB's two-kernel policy with the custom vectorized firs
   overhead.
 - Whether CUB uses a different launch strategy or fewer bottleneck symptoms.
 
-# Softmax Nsight Templates
+## Softmax Nsight Evidence
 
-Do not fill these with guessed values. Use only `softmax_*.ncu-rep` files under
-`results/rtx_5060_ti/ncu/`. If a metric is absent, write `not captured`.
+The softmax values below use only `softmax_results.csv` and the
+`softmax_*.ncu-rep` files under `results/rtx_5060_ti/ncu/`. Benchmark rows and
+Nsight profiler rows are related by shape, but they are separate measurements.
+If a metric was absent from the extracted report data, it is written as
+`not captured`.
 
 ### stable_two_pass
 
 ```text
-input shape: TODO
-median benchmark latency: TODO
-benchmark bandwidth: TODO
-baseline ratio: TODO
-profiled kernel: TODO
-achieved occupancy: not captured
-register count: not captured
-memory throughput: not captured
-global load behavior: not captured
-shared memory usage: not captured
-top warp stall reason: not captured
-interpretation: TODO
-next experiment: TODO
+input shape: 4096 x 512
+median benchmark latency: 125.0240058 us
+benchmark bandwidth: 268.3839139 GB/s
+baseline ratio: 1
+profiled kernel: stable_two_pass_kernel, grid (32, 1, 1)
+achieved occupancy: 8.321258%
+register count: 39 registers/thread
+memory throughput: 99397856793.850861 byte/s DRAM, 69.269273% peak sustained elapsed
+global load behavior: 4 byte/sector
+shared memory usage: 1024 byte/block total, 0 byte/block dynamic, 0 byte/block static
+top warp stall reason: long scoreboard, 13.171933 inst
+interpretation: The one-thread-per-row stable baseline has low achieved occupancy and scalar-looking global load behavior in the profiled shape. It is useful as a correctness and ratio baseline, but the CSV benchmark shows much higher latency than the cooperative variants.
+next experiment: Compare against a multi-row-per-block scalar baseline to separate poor occupancy from the cost of serial row reductions.
 ```
 
 ### block_reduce
 
 ```text
-input shape: TODO
-median benchmark latency: TODO
-benchmark bandwidth: TODO
-baseline ratio: TODO
-profiled kernel: TODO
-achieved occupancy: not captured
-register count: not captured
-memory throughput: not captured
-global load behavior: not captured
-shared memory usage: not captured
-top warp stall reason: not captured
-interpretation: TODO
-next experiment: TODO
+input shape: 1024 x 4096
+median benchmark latency: 56.04799837 us
+benchmark bandwidth: 1197.346309 GB/s
+baseline ratio: 0.06107895034
+profiled kernel: block_reduce_kernel, grid (1024, 1, 1)
+achieved occupancy: 91.832641%
+register count: 22 registers/thread
+memory throughput: 308736740135.620300 byte/s DRAM, 70.005227% peak sustained elapsed
+global load behavior: 32 byte/sector
+shared memory usage: 2048 byte/block total, 1024 byte/block dynamic, 0 byte/block static
+top warp stall reason: long scoreboard, 20.942470 inst
+interpretation: The block-per-row kernel uses cooperative reductions and reaches high occupancy on the profiled large-row shape. It is much faster than the serial stable baseline in the CSV data, but still trails warp_small_row for this measured implementation and shape.
+next experiment: Sweep block size and rows-per-block policy for large rows to see whether better occupancy, fewer synchronizations, or more vectorized memory access changes the gap.
 ```
 
 ### warp_small_row
 
 ```text
-input shape: TODO
-median benchmark latency: TODO
-benchmark bandwidth: TODO
-baseline ratio: TODO
-profiled kernel: TODO
-achieved occupancy: not captured
-register count: not captured
-memory throughput: not captured
-global load behavior: not captured
-shared memory usage: not captured
-top warp stall reason: not captured
-interpretation: TODO
-next experiment: TODO
+input shape: 4096 x 128
+median benchmark latency: 10.36799978 us
+benchmark bandwidth: 809.0864366 GB/s
+baseline ratio: 0.2863455528
+profiled kernel: warp_small_row_kernel, grid (512, 1, 1)
+achieved occupancy: 77.515592%
+register count: 40 registers/thread
+memory throughput: 271105929108.687744 byte/s DRAM, 61.676348% peak sustained elapsed
+global load behavior: 32 byte/sector
+shared memory usage: 1024 byte/block total, 0 byte/block dynamic, 0 byte/block static
+top warp stall reason: long scoreboard, 8.019646 inst
+interpretation: The warp-per-row kernel is the fastest softmax variant in the benchmark CSV for every measured shape and is especially aligned with the profiled small-row case. The large-row win in the CSV should be treated as implementation-specific, not a universal softmax rule.
+next experiment: Repeat benchmark runs and profile warp_small_row on the 1024 x 4096 shape to confirm whether the large-row result is stable.
 ```
+
+## Softmax Benchmark vs Profiler Evidence
+
+- Fastest CSV variant for all four measured shapes: `warp_small_row`.
+- Highest estimated effective bandwidth for all four measured shapes:
+  `warp_small_row`.
+- Small-row behavior matches the expected model: the warp-per-row path avoids
+  block-wide synchronization and performs row reductions with shuffle
+  instructions.
+- The measured large-row behavior also favors `warp_small_row` in this run, but
+  that should be treated as implementation-specific until repeated runs and
+  additional profiling confirm it.
+- The profiled softmax variants all report long scoreboard as the top captured
+  stall reason, which is consistent with memory dependency being important in
+  row-wise softmax.
