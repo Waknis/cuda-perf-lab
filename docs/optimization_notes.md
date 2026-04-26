@@ -93,3 +93,42 @@ The profiled softmax reports captured long scoreboard as the top warp stall
 reason for `stable_two_pass`, `block_reduce`, and `warp_small_row`. That is
 consistent with memory dependency being an important limiter, but it does not
 replace the benchmark CSV for latency comparisons.
+
+# Monte Carlo Variants
+
+## cpu_baseline
+
+The CPU baseline computes the double-precision analytical Black-Scholes call
+price. It exists for correctness context and does not define the GPU latency
+ratio baseline.
+
+## gpu_naive_curand
+
+One GPU thread simulates one path using XORWOW cuRAND state. This is the simple
+GPU baseline: path simulation, payoff generation, and payoff writes are direct
+and readable.
+
+## gpu_philox
+
+One GPU thread simulates one path using Philox cuRAND state. Philox is the v1
+latency-ratio baseline because it is deterministic and parallel-friendly.
+
+## gpu_philox_antithetic
+
+This variant uses each random draw together with its negation and averages the
+paired payoffs. The purpose is to show variance/runtime tradeoffs, not to assume
+variance reduction without measured standard-error output.
+
+## CUB payoff reduction
+
+Monte Carlo v1 uses CUB `DeviceReduce::Sum` for payoff and payoff-squared
+arrays. That keeps the final aggregation credible and makes the benchmark focus
+on the cost of simulation plus production-grade reductions.
+
+## Future Monte Carlo Extensions
+
+- Asian option.
+- Barrier option.
+- Quasi-random Sobol draws.
+- Mixed precision simulation.
+- Multi-asset simulation.

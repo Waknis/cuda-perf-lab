@@ -148,3 +148,39 @@ synchronization and memory rereads matters. The `1024 x 4096` result also favors
 implementation rather than a general rule; a more complete roofline study would
 repeat runs and profile the same large shape for both `block_reduce` and
 `warp_small_row`.
+
+# Roofline Notes: Monte Carlo
+
+Monte Carlo Black-Scholes is not a pure memory-bandwidth test. Each path needs
+random normal generation, exponential math, payoff computation, and reductions
+over payoff statistics.
+
+## Basic Model
+
+For `paths` requested samples, the v1 benchmark writes:
+
+```text
+payoff_bytes = paths * sizeof(float)
+payoff_square_bytes = paths * sizeof(float)
+```
+
+It then uses CUB `DeviceReduce::Sum` over both arrays. The exact internal CUB
+traffic is implementation-dependent, so this repo should not claim precise CUB
+memory traffic without profiler evidence.
+
+## Expected Behavior
+
+- `steps = 1` stresses RNG setup inside the simulation loop, terminal GBM math,
+  payoff writes, and CUB reductions.
+- `steps = 64` increases random draws and exponential/log-space stepping work,
+  so math and RNG cost should matter more than simple payoff memory traffic.
+- Antithetic variates may reduce standard error for the same requested path
+  count, but the reduction should be confirmed from real benchmark output.
+- Philox is the latency-ratio baseline because it is deterministic and
+  parallel-friendly for this staged benchmark.
+
+## What To Record
+
+After real runs, record latency, paths per second, estimated price, analytical
+price, standard error, confidence interval, and baseline ratio. Do not infer
+speedups or variance reduction without generated CSV/JSON output.

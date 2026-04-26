@@ -28,7 +28,8 @@
       "configurePreset": "configure-debug",
       "targets": [
         "reduction_bench",
-        "softmax_bench"
+        "softmax_bench",
+        "monte_carlo_bench"
       ]
     },
     {
@@ -36,7 +37,8 @@
       "configurePreset": "configure-release",
       "targets": [
         "reduction_bench",
-        "softmax_bench"
+        "softmax_bench",
+        "monte_carlo_bench"
       ]
     }
   ]

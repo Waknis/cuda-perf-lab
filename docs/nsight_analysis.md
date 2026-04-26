@@ -218,3 +218,66 @@ next experiment: Repeat benchmark runs and profile warp_small_row on the 1024 x 
 - The profiled softmax variants all report long scoreboard as the top captured
   stall reason, which is consistent with memory dependency being important in
   row-wise softmax.
+
+## Monte Carlo Nsight Template
+
+Monte Carlo profiler rows should be filled only from
+`results/rtx_5060_ti/ncu/monte_carlo_*.ncu-rep`. If a metric is absent from the
+report, write `not captured`.
+
+### gpu_naive_curand
+
+```text
+input paths: TODO
+input steps: TODO
+median benchmark latency: TODO
+paths per second: TODO
+profiled kernel: TODO
+achieved occupancy: TODO
+register count: TODO
+memory throughput: TODO
+global load/store behavior: TODO
+shared memory usage: TODO
+warp stall reasons: TODO
+special function or math pipeline notes: TODO
+interpretation: TODO
+next experiment: TODO
+```
+
+### gpu_philox
+
+```text
+input paths: TODO
+input steps: TODO
+median benchmark latency: TODO
+paths per second: TODO
+profiled kernel: TODO
+achieved occupancy: TODO
+register count: TODO
+memory throughput: TODO
+global load/store behavior: TODO
+shared memory usage: TODO
+warp stall reasons: TODO
+special function or math pipeline notes: TODO
+interpretation: TODO
+next experiment: TODO
+```
+
+### gpu_philox_antithetic
+
+```text
+input paths: TODO
+input steps: TODO
+median benchmark latency: TODO
+paths per second: TODO
+profiled kernel: TODO
+achieved occupancy: TODO
+register count: TODO
+memory throughput: TODO
+global load/store behavior: TODO
+shared memory usage: TODO
+warp stall reasons: TODO
+special function or math pipeline notes: TODO
+interpretation: TODO
+next experiment: TODO
+```

@@ -4,8 +4,9 @@ Architecture-aware CUDA kernel optimization experiments for AI inference and
 numerical finance workloads.
 
 The repo currently contains completed reduction and softmax v1 artifacts with
-RTX 5060 Ti benchmark and Nsight evidence. Matmul and Monte Carlo are not
-implemented yet.
+RTX 5060 Ti benchmark and Nsight evidence. Monte Carlo v1 benchmark code is
+present with TODO result placeholders until real runs are generated. Matmul is
+not implemented yet.
 
 ## What This Repo Proves
 
@@ -33,6 +34,10 @@ data.
 - Profiling: Nsight Compute reports for reduction and softmax point to memory
   dependency as a central bottleneck, with long scoreboard stalls appearing in
   the profiled kernels.
+- Monte Carlo: Black-Scholes v1 adds parallel path simulation, cuRAND variants,
+  CUB payoff reductions, standard error, and confidence intervals for a
+  quant-oriented GPU workload. Result tables stay TODO until real runs are
+  generated.
 
 ## Workflow
 
@@ -47,7 +52,7 @@ From the repo root in WSL, regenerate the benchmark CSV/JSON results with:
 ```bash
 cmake --preset configure-release
 cmake --build --preset build-release
-./scripts/run_reduction.sh && ./scripts/run_softmax.sh
+./scripts/run_reduction.sh && ./scripts/run_softmax.sh && ./scripts/run_monte_carlo.sh
 ```
 
 Nsight Compute reports use the `profile_*_ncu.sh` scripts documented in the
@@ -437,6 +442,108 @@ for specific row widths, use architecture-specific launch policy, and avoid
 extra reads or writes in ways this educational v1 does not. Beating them is not
 the claim; explaining the gap is the point.
 
+## Monte Carlo
+
+Monte Carlo v1 adds a numerical finance workload: Black-Scholes European call
+option pricing with GPU path simulation. It demonstrates random number
+generation cost, payoff generation, payoff reduction, statistical error,
+confidence intervals, and latency/throughput tradeoffs.
+
+### Why Monte Carlo Matters
+
+Monte Carlo is common in quant development because many pricing and risk
+problems are easier to simulate than solve analytically. It is also a useful GPU
+performance workload because independent paths expose parallelism, while RNG,
+`expf`, and payoff reductions keep it from being a pure memory-copy benchmark.
+
+The benchmark reports a double-precision CPU analytical Black-Scholes price as
+correctness context. Monte Carlo estimates vary with random draws, so the
+benchmark reports standard error and a 95 percent confidence interval instead
+of requiring exact equality.
+
+### Monte Carlo Variants
+
+| Variant | Purpose |
+| --- | --- |
+| `cpu_baseline` | Double-precision analytical Black-Scholes reference only. |
+| `gpu_naive_curand` | One thread per path using XORWOW cuRAND state. |
+| `gpu_philox` | One thread per path using Philox cuRAND state; latency ratio baseline. |
+| `gpu_philox_antithetic` | Philox path simulation with antithetic `z` and `-z` payoff averaging. |
+| `all` | Runs every Monte Carlo variant. |
+
+### Run Monte Carlo
+
+Build and run a small smoke test:
+
+```bash
+cmake --build --preset build-release
+./build/release/monte_carlo_bench --variant all --paths 1024 --steps 1 --iters 3 --warmup 1 --seed 123
+```
+
+Generate representative RTX 5060 Ti Monte Carlo CSV and JSON results:
+
+```bash
+./scripts/run_monte_carlo.sh
+```
+
+The script writes:
+
+```text
+results/rtx_5060_ti/monte_carlo_results.csv
+results/rtx_5060_ti/monte_carlo_results.json
+```
+
+### Monte Carlo Methodology
+
+- Default option parameters are `spot=100`, `strike=100`, `rate=0.05`,
+  `vol=0.2`, and `maturity=1.0`.
+- For `steps=1`, GPU kernels sample the terminal geometric Brownian motion
+  distribution directly.
+- For `steps>1`, GPU kernels use log-space Euler stepping.
+- GPU simulation is float32; the analytical Black-Scholes reference is double
+  precision on CPU.
+- GPU timing includes random draw/path simulation, payoff generation, payoff
+  reduction, and payoff-squared reduction.
+- GPU timing excludes memory allocation, RNG state initialization, CUB temp
+  allocation, host-side result copies, and formatting.
+- CUB `DeviceReduce::Sum` is used for payoff and payoff-squared reductions.
+- `baseline_ratio` is relative to `gpu_philox`; `gpu_philox` reports `1.0`,
+  and `cpu_baseline` leaves the ratio empty/null.
+
+### Monte Carlo Results
+
+Source: `results/rtx_5060_ti/monte_carlo_results.csv`.
+
+TODO: run `./scripts/run_monte_carlo.sh` on the RTX 5060 Ti and paste only
+real generated rows here.
+
+| paths | steps | variant | median us | p95 us | paths/s | estimated price | analytical price | standard error | 95% CI | baseline ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+
+### Monte Carlo Nsight Compute
+
+Profile representative Monte Carlo variants:
+
+```bash
+./scripts/profile_monte_carlo_ncu.sh
+```
+
+Reports are saved under:
+
+```text
+results/rtx_5060_ti/ncu/
+```
+
+Captured report summary:
+
+TODO: fill this table only after real `.ncu-rep` files are generated and
+inspected. Missing metrics should be recorded as `not captured`.
+
+| variant | paths | steps | achieved occupancy | registers/thread | memory throughput | global load/store behavior | top captured stall |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO |
+
 ## Smoke Verification
 
 These commands were used for smoke testing during v1 development:
@@ -445,6 +552,8 @@ These commands were used for smoke testing during v1 development:
 cmake --build --preset build-release
 ./build/release/reduction_bench --variant all --n 1048576 --iters 5 --warmup 2 --seed 123
 ./build/release/reduction_bench --variant vectorized_float4 --n 1048581 --iters 3 --warmup 1 --seed 123
+./build/release/monte_carlo_bench --variant all --paths 1024 --steps 1 --iters 3 --warmup 1 --seed 123
+./build/release/monte_carlo_bench --variant all --paths 4096 --steps 16 --iters 3 --warmup 1 --seed 123
 ```
 
 They are correctness and CLI checks, not final benchmark evidence.
@@ -468,7 +577,6 @@ That failure analysis is part of the point.
 ## Planned Work
 
 - Matmul: tiled matrix multiplication with cuBLAS comparison.
-- Monte Carlo: option pricing for quant workloads.
 
 ## Repo Layout
 
@@ -481,6 +589,8 @@ include/
   common/
 kernels/
   reduction/
+  softmax/
+  monte_carlo/
 benchmarks/
 scripts/
 docs/
