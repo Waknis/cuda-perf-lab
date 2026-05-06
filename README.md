@@ -19,10 +19,6 @@ This repo is built to show kernel-level reasoning, not just timing output.
 - CUB as the production-grade baseline.
 - Roofline and Nsight Compute notes for explaining why a kernel is fast or slow.
 
-No benchmark number, Nsight metric, hardware result, or speedup in this repo
-should be invented. Empty tables stay TODO until a command actually produces
-data.
-
 ## Highlights
 
 - Reduction: the custom `vectorized_float4` kernel reached `1.006358415x` CUB
